@@ -1,0 +1,17 @@
+[package]
+name = "dy_xhs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+axum = "0.7.5"
+md5 = "0.7.0"
+rc4 = "0.1.0"
+regex = "1.10.4"
+reqwest = "0.12.4"
+serde = { version = "1.0.198", features = ["derive"] }
+serde_json = "1.0.116"
+tokio = { version = "1.37.0", features = ["full"] }
+validator = { version = "0.18.1", features = ["derive"] }
