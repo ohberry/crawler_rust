@@ -1,5 +1,14 @@
-use std::{result, time::SystemTime};
+use std::time::SystemTime;
 
+use rc4::Rc4;
+use rc4::{KeyInit, StreamCipher};
+
+const LIST: [u8; 103] = [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 10, 11, 12, 13, 14, 15,
+];
 const CHARACTER: &str = "Dkdpgh4ZKsQB80/Mfvw36XI1R25-WUAlEi7NLboqYTOPuzmFjJnryx9HVGcaStCe=";
 
 fn md52array(md5: &str) -> Vec<u8> {
@@ -10,8 +19,8 @@ fn md52array(md5: &str) -> Vec<u8> {
     } else {
         let mut idx = 0;
         while idx < len {
-            let c1 = (md5.chars().nth(idx).unwrap() as u8) << 4;
-            let c2 = md5.chars().nth(idx + 1).unwrap() as u8;
+            let c1 = LIST[md5.chars().nth(idx).unwrap() as usize] << 4;
+            let c2 = LIST[md5.chars().nth(idx + 1).unwrap() as usize];
             arr.push(c1 | c2);
             idx += 2;
         }
@@ -26,7 +35,23 @@ fn md5_encrypt(url_path: &str) -> Vec<u8> {
     md52array(m3.as_str())
 }
 
-fn encoding_conversion() {}
+fn encoding_conversion(arr: &Vec<u8>) -> String {
+    let mut y = vec![arr[0]];
+    let mut temp = vec![
+        arr[10], arr[1], arr[11], arr[2], arr[12], arr[3], arr[13], arr[4], arr[14], arr[5],
+        arr[15], arr[6], arr[16], arr[7], arr[17], arr[8], arr[18], arr[9],
+    ];
+    y.append(&mut temp);
+    let character: String = y.iter().map(|&item| item as char).collect();
+    character
+}
+
+fn encoding_conversion2(a: u8, b: u8, c: String) -> String {
+    //将三个参数合并为一个字符串
+    let mut arr3 = vec![a, b];
+    arr3.append(&mut c.chars().map(|c| c as u8).collect());
+    arr3.iter().map(|&item| item as char).collect()
+}
 
 fn calculation(a1: i32, a2: i32, a3: i32) -> String {
     let x1 = (a1 & 255) << 16;
@@ -44,7 +69,7 @@ fn calculation(a1: i32, a2: i32, a3: i32) -> String {
     })
 }
 
-fn generate_xb(url_path:&str) {
+pub fn generate_xb(url_path: &str) -> String {
     let arr1 = md52array("d88201c9344707acde7261b158656c0e");
     let arr2 = md52array(
         format!(
@@ -54,19 +79,75 @@ fn generate_xb(url_path:&str) {
         .as_str(),
     );
     let url_path_array = md5_encrypt(url_path);
-    let timestamp = SystemTime::now()
-    .duration_since(SystemTime::UNIX_EPOCH)
-    .unwrap()
-    .as_secs();
-    let ct = 536919696;
-    let arr3:Vec<i32> = vec![];
-    let arr4:Vec<i32> =vec![];
+    // let timestamp = SystemTime::now()
+    //     .duration_since(SystemTime::UNIX_EPOCH)
+    //     .unwrap()
+    //     .as_secs();
+    let timestamp = 1714457109;
+    let ct: u32 = 536919696;
+    let mut arr3: Vec<u8> = vec![];
+    let mut arr4: Vec<u8> = vec![];
+    let mut new_arr: Vec<u8> = vec![
+        64,
+        0,
+        1,
+        8,
+        url_path_array[14],
+        url_path_array[15],
+        arr2[14],
+        arr2[15],
+        arr1[14],
+        arr1[15],
+        (timestamp >> 24 & 255) as u8,
+        (timestamp >> 16 & 255) as u8,
+        (timestamp >> 8 & 255) as u8,
+        (timestamp & 255) as u8,
+        (ct >> 24 & 255) as u8,
+        (ct >> 16 & 255) as u8,
+        (ct >> 8 & 255) as u8,
+        (ct & 255) as u8,
+    ];
+    let mut xor_result = new_arr[0];
+    for i in 1..new_arr.len() {
+        xor_result ^= new_arr[i];
+    }
+    new_arr.push(xor_result);
+    let mut idx = 0;
+    while idx < new_arr.len() {
+        arr3.push(new_arr[idx]);
+        if let Some(&value) = new_arr.get(idx + 1) {
+            arr4.push(value);
+        }
+        idx += 2;
+    }
+    arr3.append(&mut arr4);
+    //将函数结果转为字节数组
+    let mut data: Vec<u8> = encoding_conversion(&arr3)
+        .chars()
+        .map(|c| c as u8)
+        .collect();
+    let mut rc4 = Rc4::new(b"\xFF".into());
+    rc4.apply_keystream(&mut data);
+    let garbled_code: String = data.iter().map(|&item| item as char).collect();
+    let garbled_code = encoding_conversion2(2, 255, garbled_code);
+    let mut idx = 0;
+    let mut xb = String::new();
+    while idx < garbled_code.chars().count() {
+        let temp = calculation(
+            garbled_code.chars().nth(idx).unwrap() as i32,
+            garbled_code.chars().nth(idx + 1).unwrap() as i32,
+            garbled_code.chars().nth(idx + 2).unwrap() as i32,
+        );
+        xb.push_str(&temp);
+        idx += 3;
+    }
+    xb
 }
 
 #[cfg(test)]
 mod tests {
-    use rc4::{consts::*, KeyInit, StreamCipher};
-    use rc4::{Key, Rc4};
+    use rc4::Rc4;
+    use rc4::{KeyInit, StreamCipher};
 
     use super::*;
 
@@ -89,5 +170,11 @@ mod tests {
         rc4.apply_keystream(&mut data);
         // assert_eq!(data, [0xBB, 0xF3, 0x16, 0xE8, 0xD9, 0x40, 0xAF, 0x0A, 0xD3]);
         println!("{:?}", data);
+    }
+
+    #[test]
+    fn test_xb() {
+        let result =generate_xb("aid=6383&sec_user_id=MS4wLjABAAAA5fOskZLfiDB9wvPP0LHJB_tDvwTnzKL2K3Cj1C-81YczaAhHUvFr-7BnpZ-yOiX6&count=20&max_cursor=0&cookie_enabled=true&platform=PC&downlink=10");
+        println!("{}", result);
     }
 }
