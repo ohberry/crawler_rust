@@ -79,11 +79,10 @@ pub fn generate_xb(url_path: &str) -> String {
         .as_str(),
     );
     let url_path_array = md5_encrypt(url_path);
-    // let timestamp = SystemTime::now()
-    //     .duration_since(SystemTime::UNIX_EPOCH)
-    //     .unwrap()
-    //     .as_secs();
-    let timestamp = 1714457109;
+    let timestamp = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
     let ct: u32 = 536919696;
     let mut arr3: Vec<u8> = vec![];
     let mut arr4: Vec<u8> = vec![];
