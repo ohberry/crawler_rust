@@ -20,11 +20,12 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Stdio;
+use std::sync::Arc;
 use std::time::Duration;
 use std::{fs, io};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::windows::named_pipe::ClientOptions;
-use tokio::process::Command;
+use tokio::process::{ChildStdin, ChildStdout, Command};
 use tokio::time;
 use validator::Validate;
 use windows_sys::Win32::Foundation::ERROR_PIPE_BUSY;
@@ -35,35 +36,26 @@ static DY_IMG_TYPE: [i64; 3] = [2, 68, 150];
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = Command::new("std");
+    let mut child = Command::new("D:\\Src\\VSC\\js\\prod\\xhs_xs\\std.exe")
+        // .arg("D:\\Src\\VSC\\js\\prod\\xhs_xs\\std.js")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn command");
 
-    // Specify that we want the command's standard output piped back to us.
-    // By default, standard input/output/error will be inherited from the
-    // current process (for example, this means that standard input will
-    // come from the keyboard and standard output/error will go directly to
-    // the terminal if this process is invoked from the command line).
-    cmd.stdout(Stdio::piped());
-    cmd.stdin(Stdio::piped());
-    let mut child = cmd.spawn().expect("failed to spawn command");
     let mut stdin = child
         .stdin
         .take()
         .expect("child did not have a handle to stdin");
-
     stdin
-        .write("hello".as_bytes())
+        .write("xhs-".as_bytes())
         .await
         .expect("could not write to stdin");
-
-    let stdout = child
-        .stdout
-        .take()
-        .expect("child did not have a handle to stdout");
 
     drop(stdin);
 
     let op = child.wait_with_output().await?;
-    println!("stdout: {}", String::from_utf8_lossy(&op.stdout));
+    println!("{}", String::from_utf8_lossy(&op.stdout));
 
     // const PIPE_NAME: &str = r"\\.\pipe\dy_xhs";
 
@@ -164,9 +156,9 @@ async fn handle_douyin(
     //has_more 代表是否还有更多，1代表有，0代表没有
     let mut has_more = 1;
     // let builder = ClientBuilder::new();
-    /**
-     * Client内部会维护一个连接池，对于相同的主机和端口的连接可复用，与请求参数，请求头等无关
-     */
+    
+     //Client内部会维护一个连接池，对于相同的主机和端口的连接可复用，与请求参数，请求头等无关
+     
     let client = Client::new();
     while has_more == 1 {
         let mut params = generate_xb(format!(
@@ -228,7 +220,6 @@ async fn handle_douyin(
             //如果key不存在就将key的值设置为create_time
             let mut last_time = 0;
             if !conn.exists(aweme_id).await? {
-                last_time = create_time;
                 conn.set(aweme_id, create_time).await?;
             }
             if create_time <= last_time {
